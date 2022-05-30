@@ -65,11 +65,11 @@ int16_t R_Speed = 0;
 int16_t L_Speed = 0;
 
 // Motor speed limits.
-uint8_t min_speed = 20;
-uint8_t max_speed = 100;
+int8_t min_speed = -100;
+int8_t max_speed = 100;
 
 // Motor power limit is 255, but in order to save energy and reduce heat, the limit should be avoided.
-uint8_t min_power = 100;
+uint8_t min_power = 80;
 uint8_t max_power = 240;
 
 // Power values are linearly interpolated from speed values:
@@ -77,7 +77,7 @@ uint8_t max_power = 240;
 // In order to avoid useless computation, the power interpolation factor "((max_power - min_power) / (max_speed - min_speed))" is precomputed:
 float power_interpol_factor = ((((float) max_power) - ((float) min_power)) / (((float) max_speed) - ((float) min_speed)));
 
-uint8_t motor_speed = 60;
+int8_t motor_speed = 60;
 
 void setup() {
   pinMode (LEDPIN, OUTPUT);
@@ -102,12 +102,10 @@ void setup() {
   }
 }
 
+int increment = 1;
+
 
 void loop() {
-  if (Serial.available()) {
-    motor_speed = Serial.parseInt();
-  }
-
   // Run main loop every ~4ms.
   if ((freqCounter & 0x07f) == 0) {
     // Record when loop starts.
@@ -120,6 +118,13 @@ void loop() {
 
     // Run if on sent from smartphone and battery is charged.
     if (Bat_Discharged == false) {
+      if (motor_speed >= max_speed) {
+        increment = -1;
+      } else if (motor_speed <= min_speed) {
+        increment = 1;
+      }
+
+      motor_speed += increment;
       runMotors(motor_speed);
     } else {
       // Turn motors off if battery is discharged.
@@ -139,11 +144,12 @@ void loop() {
 
 void runMotors(int16_t motorSpeed) {
   if (vertical == true) {
-    R_Speed = motorSpeed;
-    L_Speed = motorSpeed;
+    int16_t clamped_speed = constrain(motorSpeed, min_speed, max_speed);
+    R_Speed = clamped_speed;
+    L_Speed = clamped_speed;
 
     // Interpolate values given the speed and power limits:
-    MotorPower = min_power + power_interpol_factor * (motorSpeed - min_speed);
+    MotorPower = min_power + power_interpol_factor * (abs(clamped_speed) - min_speed);
 
     // Run motors.
     moveMotor(R_Motor, (uint8_t) (R_MotorStep >> 8), MotorPower);
