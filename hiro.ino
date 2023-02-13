@@ -59,7 +59,7 @@ void setup() {
   pinMode (LEDPIN, OUTPUT);
 
   // Setup brushless motor Controller.
-  initMotors();
+  init_motors();
 }
 
 void loop() {
@@ -68,14 +68,17 @@ void loop() {
     // Record when loop starts.
     old_freq_counter = freq_counter;
 
+    // Main logic: set speed between -100 and 100 in order to allow the motor to run
     if (speed >= max_speed) {
       increment = -1;
     } else if (speed <= min_speed) {
       increment = 1;
     }
-
     speed += increment;
-    runMotors(speed);
+    
+
+    // Actually run the motor.
+    run_motor();
 
     // Calculate loop time.
     if (freq_counter > old_freq_counter) {
@@ -86,18 +89,18 @@ void loop() {
   }
 }
 
-void runMotors(int16_t motorSpeed) {
-  int16_t clamped_speed = constrain(motorSpeed, min_speed, max_speed);
+void run_motor() {
+  int16_t clamped_speed = constrain(speed, min_speed, max_speed);
   motor_speed = clamped_speed;
 
   // Interpolate values given the speed and power limits:
   motor_power = min_power + power_interpol_factor * (abs(clamped_speed) - min_speed);
 
-  // Run motors.
-  moveMotor((uint8_t) (motor_step >> 8), motor_power);
+  // Run motor.
+  move_motor((uint8_t) (motor_step >> 8), motor_power);
 }
 
-void initMotors() {
+void init_motors() {
   // Motor pins.
   pinMode(5, OUTPUT);
   pinMode(6, OUTPUT);
@@ -142,24 +145,23 @@ void initMotors() {
   OCR1A = 0;  //D9
 
   // Switch off PWM Power.
-  stopMotor();
+  stop_motor();
 }
 
 // Switch off motor power.
-void stopMotor() {
-  moveMotor(0, 0);
-  moveMotor(0, 0);
+void stop_motor() {
+  move_motor(0, 0);
 }
 
-void moveMotor(uint8_t posStep, uint16_t power) {
+void move_motor(uint8_t pos_step, uint16_t power) {
   uint16_t pwm_a;
   uint16_t pwm_b;
   uint16_t pwm_c;
 
   // Lookup sine values from table with 120deg offsets.
-  pwm_a = pwm_sin[(uint8_t) posStep];
-  pwm_b = pwm_sin[(uint8_t) (posStep + 85)];
-  pwm_c = pwm_sin[(uint8_t) (posStep + 170)];
+  pwm_a = pwm_sin[(uint8_t) pos_step];
+  pwm_b = pwm_sin[(uint8_t) (pos_step + 85)];
+  pwm_c = pwm_sin[(uint8_t) (pos_step + 170)];
 
   // Scale motor power.
   pwm_a = power * pwm_a;
