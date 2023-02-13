@@ -7,13 +7,9 @@
 // Voltage to reset Bat_Discharged to false.
 #define resetVoltage  3 * 3.7 * 50.76
 
-#define PWM_A_MOTOR1 OCR2A
-#define PWM_B_MOTOR1 OCR1B
+#define PWM_A_MOTOR1 OCR0A
+#define PWM_B_MOTOR1 OCR0B
 #define PWM_C_MOTOR1 OCR1A
-
-#define PWM_A_MOTOR0 OCR0A
-#define PWM_B_MOTOR0 OCR0B
-#define PWM_C_MOTOR0 OCR2B
 
 uint16_t freqCounter = 0;
 uint16_t oldfreqCounter = 0;
@@ -49,20 +45,14 @@ int8_t pwmSinMotor[] = {0,    5,    10,   16,   21,   27,   32,   37,   43,   48
 // 0 to 255, 255 means 100% power.
 uint16_t MotorPower = 120;
 
-// Motor numbers.
-#define L_Motor 0
-#define R_Motor 1
-
 //motor pole angle, 0->255 overflow to loop after >>8 shift
-uint16_t R_MotorStep = 0;
-uint16_t L_MotorStep = 0;
+uint16_t MotorStep = 0;
 
 //rotation speed for turning
 int8_t rot_Speed = 0;
 
 // speed of motors, -127 to 127
 int16_t R_Speed = 0;
-int16_t L_Speed = 0;
 
 // Motor speed limits.
 int8_t min_speed = -100;
@@ -104,7 +94,6 @@ void setup() {
 
 int increment = 1;
 
-
 void loop() {
   // Run main loop every ~4ms.
   if ((freqCounter & 0x07f) == 0) {
@@ -128,7 +117,7 @@ void loop() {
       runMotors(motor_speed);
     } else {
       // Turn motors off if battery is discharged.
-      stopMotors();
+      stopMotor();
       MotorPower = 0;
     }
 
@@ -146,30 +135,30 @@ void runMotors(int16_t motorSpeed) {
   if (vertical == true) {
     int16_t clamped_speed = constrain(motorSpeed, min_speed, max_speed);
     R_Speed = clamped_speed;
-    L_Speed = clamped_speed;
 
     // Interpolate values given the speed and power limits:
     MotorPower = min_power + power_interpol_factor * (abs(clamped_speed) - min_speed);
 
     // Run motors.
-    moveMotor(R_Motor, (uint8_t) (R_MotorStep >> 8), MotorPower);
-    moveMotor(L_Motor, (uint8_t) (L_MotorStep >> 8), MotorPower);
+    moveMotor((uint8_t) (MotorStep >> 8), MotorPower);
   }
 
   else {
     // If not vertical turn everything off.
-    stopMotors();
+    stopMotor();
     MotorPower = 0;
   }
 }
 
 void initMotors() {
-  pinMode(3, OUTPUT);
+  // Motor pins.
   pinMode(5, OUTPUT);
   pinMode(6, OUTPUT);
   pinMode(9, OUTPUT);
-  pinMode(10, OUTPUT);
-  pinMode(11, OUTPUT);
+
+  // Enable pin.
+  pinMode (8, OUTPUT);
+  digitalWrite(8, HIGH);
 
   digitalWrite(LEDPIN, HIGH);
 
@@ -201,24 +190,21 @@ void initMotors() {
   sei();
 
   // Turn off all PWM signals.
-  OCR2A = 0;  //11  APIN
-  OCR2B = 0;  //D3
-  OCR1A = 0;  //D9  CPIN
-  OCR1B = 0;  //D10 BPIN
   OCR0A = 0;  //D6
   OCR0B = 0;  //D5
+  OCR1A = 0;  //D9
 
   // Switch off PWM Power.
-  stopMotors();
+  stopMotor();
 }
 
 // Switch off motor power.
-void stopMotors() {
-  moveMotor(L_Motor, 0, 0);
-  moveMotor(R_Motor, 0, 0);
+void stopMotor() {
+  moveMotor(0, 0);
+  moveMotor(0, 0);
 }
 
-void moveMotor(uint8_t motorNumber, uint8_t posStep, uint16_t power) {
+void moveMotor(uint8_t posStep, uint16_t power) {
   uint16_t pwm_a;
   uint16_t pwm_b;
   uint16_t pwm_c;
@@ -242,17 +228,9 @@ void moveMotor(uint8_t motorNumber, uint8_t posStep, uint16_t power) {
   pwm_c += 128;
 
   // Set motor pwm variables.
-  if (motorNumber == 0) {
-    PWM_A_MOTOR0 = (uint8_t) pwm_a;
-    PWM_B_MOTOR0 = (uint8_t) pwm_b;
-    PWM_C_MOTOR0 = (uint8_t) pwm_c;
-  }
-
-  if (motorNumber == 1) {
-    PWM_A_MOTOR1 = (uint8_t) pwm_a;
-    PWM_B_MOTOR1 = (uint8_t) pwm_b;
-    PWM_C_MOTOR1 = (uint8_t) pwm_c;
-  }
+  PWM_A_MOTOR0 = (uint8_t) pwm_a;
+  PWM_B_MOTOR0 = (uint8_t) pwm_b;
+  PWM_C_MOTOR0 = (uint8_t) pwm_c;
 }
 
 void testBattery() {
@@ -282,7 +260,6 @@ ISR(TIMER1_OVF_vect) {
   freqCounter++;
 
   if ((freqCounter & 0x01) == 0) {
-    R_MotorStep += R_Speed;
-    L_MotorStep += L_Speed;
+    MotorStep += R_Speed;
   }
 }
