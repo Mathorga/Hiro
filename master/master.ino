@@ -26,5 +26,5 @@ void loop() {
   }
   speed += increment;
 
-  delay(500);
+  delay(10);
 }
