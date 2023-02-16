@@ -1,4 +1,7 @@
 #pragma GCC optimize ("3")
+
+#include <Wire.h>
+
 #define LEDPIN A1
 
 #define PWM_A OCR0A
@@ -58,6 +61,11 @@ int increment = 1;
 void setup() {
   pinMode (LEDPIN, OUTPUT);
 
+  // Join i2c bus with address #4.
+  Wire.begin(4);
+  // Register for i2c requests.
+  Wire.onReceive(on_i2c_request);
+
   // Setup brushless motor Controller.
   init_motors();
 }
@@ -68,14 +76,13 @@ void loop() {
     // Record when loop starts.
     old_freq_counter = freq_counter;
 
-    // Main logic: set speed between -100 and 100 in order to allow the motor to run
-    if (speed >= max_speed) {
-      increment = -1;
-    } else if (speed <= min_speed) {
-      increment = 1;
-    }
-    speed += increment;
-    
+    // // Main logic: set speed between -100 and 100 in order to allow the motor to run
+    // if (speed >= max_speed) {
+    //   increment = -1;
+    // } else if (speed <= min_speed) {
+    //   increment = 1;
+    // }
+    // speed += increment;
 
     // Actually run the motor.
     run_motor();
@@ -86,6 +93,27 @@ void loop() {
         loop_time = freq_counter - old_freq_counter;
       }
     }
+  }
+}
+
+void on_i2c_request(int length) {
+  // Safety check.  
+  if (length != 2) {
+    return;
+  }
+
+  // Read command.  
+  char command = Wire.read();
+
+  // Read value.
+  int8_t value = Wire.read();
+
+  switch(command) {
+    case 's':
+      speed = value;
+      break;
+    default:
+      break;    
   }
 }
 
