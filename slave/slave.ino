@@ -110,6 +110,9 @@ void on_i2c_request(int length) {
 
   switch(command) {
     case 's':
+      digitalWrite(8, value > 0x77 ? HIGH : LOW);
+      break;
+    case 'r':
       speed = value;
       break;
     default:
@@ -135,10 +138,10 @@ void init_motors() {
   pinMode(9, OUTPUT);
 
   // Enable pin.
-  pinMode (8, OUTPUT);
+  pinMode(8, OUTPUT);
   digitalWrite(8, HIGH);
 
-  digitalWrite(LEDPIN, HIGH);
+  digitalWrite(LEDPIN, LOW);
 
   // Stop interrupts.
   cli();
