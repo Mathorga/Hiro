@@ -139,7 +139,7 @@ void init_motors() {
 
   // Enable pin.
   pinMode(8, OUTPUT);
-  digitalWrite(8, HIGH);
+  digitalWrite(8, LOW);
 
   digitalWrite(LEDPIN, LOW);
 
