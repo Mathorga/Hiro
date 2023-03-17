@@ -61,6 +61,8 @@ int increment = 1;
 void setup() {
   pinMode (LEDPIN, OUTPUT);
 
+  Serial.begin(9600);
+
   // Join i2c bus with address #4.
   Wire.begin(4);
   // Register for i2c requests.
@@ -70,7 +72,31 @@ void setup() {
   init_motors();
 }
 
+void read_serial() {
+  if (Serial.available() > 1) {
+    // Read command.
+    int32_t command = Serial.read();
+
+    // Read value.
+    int32_t value = Serial.read();
+
+    switch(command) {
+      case 's':
+        digitalWrite(8, value > 0x77 ? HIGH : LOW);
+        break;
+      case 'r':
+        speed = value;
+        break;
+      default:
+        break;    
+    }
+  }
+}
+
 void loop() {
+  // Fetch any serial command.
+  read_serial();
+
   // Run main loop every ~4ms.
   if ((freq_counter & 0x07f) == 0) {
     // Record when loop starts.
