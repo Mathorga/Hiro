@@ -2,7 +2,11 @@
 
 #include <Wire.h>
 
-#define LEDPIN A1
+#define MOTOR_PIN_A 5
+#define MOTOR_PIN_B 6
+#define MOTOR_PIN_C 9
+#define ENABLE_PIN 8
+#define LED_PIN 16
 
 #define PWM_A OCR0A
 #define PWM_B OCR0B
@@ -59,7 +63,12 @@ float power_interpol_factor = ((((float) max_power) - ((float) min_power)) / (((
 int increment = 1;
 
 void setup() {
-  pinMode (LEDPIN, OUTPUT);
+  // Enable outputs.
+  pinMode(MOTOR_PIN_A, OUTPUT);
+  pinMode(MOTOR_PIN_B, OUTPUT);
+  pinMode(MOTOR_PIN_C, OUTPUT);
+  pinMode(ENABLE_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
 
   Serial.begin(9600);
 
@@ -82,7 +91,7 @@ void read_serial() {
 
     switch(command) {
       case 's':
-        digitalWrite(8, value > 0x77 ? HIGH : LOW);
+        enable_motors(value);
         break;
       case 'r':
         speed = value;
@@ -136,7 +145,7 @@ void on_i2c_request(int length) {
 
   switch(command) {
     case 's':
-      digitalWrite(8, value > 0x77 ? HIGH : LOW);
+      enable_motors(value);
       break;
     case 'r':
       speed = value;
@@ -144,6 +153,12 @@ void on_i2c_request(int length) {
     default:
       break;    
   }
+}
+
+void enable_motors(int8_t value) {
+  int conv_val = value > 0x77 ? HIGH : LOW;
+  digitalWrite(ENABLE_PIN, conv_val);
+  digitalWrite(LED_PIN, conv_val);
 }
 
 void run_motor() {
@@ -158,16 +173,8 @@ void run_motor() {
 }
 
 void init_motors() {
-  // Motor pins.
-  pinMode(5, OUTPUT);
-  pinMode(6, OUTPUT);
-  pinMode(9, OUTPUT);
-
-  // Enable pin.
-  pinMode(8, OUTPUT);
-  digitalWrite(8, LOW);
-
-  digitalWrite(LEDPIN, LOW);
+  // Disable motors.
+  digitalWrite(ENABLE_PIN, LOW);
 
   // Stop interrupts.
   cli();
@@ -206,6 +213,7 @@ void init_motors() {
 }
 
 // Switch off motor power.
+// TODO This is only called in the above function, consider removing this, since there's the enable pin available.
 void stop_motor() {
   move_motor(0, 0);
 }
