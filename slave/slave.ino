@@ -2,15 +2,30 @@
 
 #include <Wire.h>
 
-#define MOTOR_PIN_A 5
-#define MOTOR_PIN_B 6
-#define MOTOR_PIN_C 9
-#define ENABLE_PIN 8
-#define LED_PIN 16
+// Left motor pins.
+#define L_MOTOR_A 5
+#define L_MOTOR_B 6
+#define L_MOTOR_C 9
+#define L_ENABLE 8
 
-#define PWM_A OCR0A
-#define PWM_B OCR0B
-#define PWM_C OCR1A
+// Right motor pins.
+#define R_MOTOR_A 10
+#define R_MOTOR_B 11
+#define R_MOTOR_C 3
+#define R_ENABLE 16
+
+#define L_PWM_A OCR0A
+#define L_PWM_B OCR0B
+#define L_PWM_C OCR1A
+
+#define R_PWM_A OCR1B
+#define R_PWM_B OCR2A
+#define R_PWM_C OCR2B
+
+enum Motor {
+  L = 0,
+  R = 1
+};
 
 uint16_t freq_counter = 0;
 uint16_t old_freq_counter = 0;
@@ -41,15 +56,15 @@ int8_t pwm_sin[] = {0,    5,    10,   16,   21,   27,   32,   37,   43,   48,   
 uint16_t motor_power = 0;
 
 //motor pole angle, 0->255 overflow to loop after >>8 shift
-uint16_t motor_step = 0;
+uint16_t motor_step[] = {0, 0};
 
 // Actual motor speed, -127 to 127
-int16_t motor_speed = 0;
+int16_t motor_speed[] = {0, 0};
 
 // Motor speed limits.
 int8_t min_speed = -100;
 int8_t max_speed = 100;
-int8_t speed = 60;
+int8_t speed[] = {60, 60};
 
 // Motor power limit is 255, but in order to save energy and reduce heat, the limit should be avoided.
 uint8_t min_power = 80;
@@ -64,11 +79,14 @@ int increment = 1;
 
 void setup() {
   // Enable outputs.
-  pinMode(MOTOR_PIN_A, OUTPUT);
-  pinMode(MOTOR_PIN_B, OUTPUT);
-  pinMode(MOTOR_PIN_C, OUTPUT);
-  pinMode(ENABLE_PIN, OUTPUT);
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(L_MOTOR_A, OUTPUT);
+  pinMode(L_MOTOR_B, OUTPUT);
+  pinMode(L_MOTOR_C, OUTPUT);
+  pinMode(L_ENABLE, OUTPUT);
+  pinMode(R_MOTOR_A, OUTPUT);
+  pinMode(R_MOTOR_B, OUTPUT);
+  pinMode(R_MOTOR_C, OUTPUT);
+  pinMode(R_ENABLE, OUTPUT);
 
   Serial.begin(9600);
 
@@ -94,10 +112,11 @@ void read_serial() {
         enable_motors(value);
         break;
       case 'r':
-        speed = value;
+        speed[L] = value;
+        speed[R] = value;
         break;
       default:
-        break;    
+        break;
     }
   }
 }
@@ -120,7 +139,8 @@ void loop() {
     // speed += increment;
 
     // Actually run the motor.
-    run_motor();
+    run_motor(L);
+    run_motor(R);
 
     // Calculate loop time.
     if (freq_counter > old_freq_counter) {
@@ -148,33 +168,34 @@ void on_i2c_request(int length) {
       enable_motors(value);
       break;
     case 'r':
-      speed = value;
+      speed[L] = value;
+      speed[R] = value;
       break;
     default:
-      break;    
+      break;
   }
 }
 
 void enable_motors(int8_t value) {
   int conv_val = value > 0x77 ? HIGH : LOW;
-  digitalWrite(ENABLE_PIN, conv_val);
-  digitalWrite(LED_PIN, conv_val);
+  digitalWrite(L_ENABLE, conv_val);
+  digitalWrite(R_ENABLE, conv_val);
 }
 
-void run_motor() {
-  int16_t clamped_speed = constrain(speed, min_speed, max_speed);
-  motor_speed = clamped_speed;
+void run_motor(uint8_t motor) {
+  int16_t clamped_speed = constrain(speed[motor], min_speed, max_speed);
+  motor_speed[motor] = clamped_speed;
 
   // Interpolate values given the speed and power limits:
   motor_power = min_power + power_interpol_factor * (abs(clamped_speed) - min_speed);
 
   // Run motor.
-  move_motor((uint8_t) (motor_step >> 8), motor_power);
+  move_motor(motor, (uint8_t) (motor_step[motor] >> 8), motor_power);
 }
 
 void init_motors() {
   // Disable motors.
-  digitalWrite(ENABLE_PIN, LOW);
+  digitalWrite(L_ENABLE, LOW);
 
   // Stop interrupts.
   cli();
@@ -204,9 +225,13 @@ void init_motors() {
   sei();
 
   // Turn off all PWM signals.
-  OCR0A = 0;  //D6
-  OCR0B = 0;  //D5
-  OCR1A = 0;  //D9
+  L_PWM_A = 0;
+  L_PWM_B = 0;
+  L_PWM_C = 0;
+
+  R_PWM_A = 0;
+  R_PWM_B = 0;
+  R_PWM_C = 0;
 
   // Switch off PWM Power.
   stop_motor();
@@ -215,10 +240,11 @@ void init_motors() {
 // Switch off motor power.
 // TODO This is only called in the above function, consider removing this, since there's the enable pin available.
 void stop_motor() {
-  move_motor(0, 0);
+  move_motor(L, 0, 0);
+  move_motor(R, 0, 0);
 }
 
-void move_motor(uint8_t pos_step, uint16_t power) {
+void move_motor(uint8_t motor, uint8_t pos_step, uint16_t power) {
   uint16_t pwm_a;
   uint16_t pwm_b;
   uint16_t pwm_c;
@@ -242,9 +268,15 @@ void move_motor(uint8_t pos_step, uint16_t power) {
   pwm_c += 128;
 
   // Set motor pwm variables.
-  PWM_A = (uint8_t) pwm_a;
-  PWM_B = (uint8_t) pwm_b;
-  PWM_C = (uint8_t) pwm_c;
+  if (motor <= L) {
+    L_PWM_A = (uint8_t) pwm_a;
+    L_PWM_B = (uint8_t) pwm_b;
+    L_PWM_C = (uint8_t) pwm_c;
+  } else {
+    R_PWM_A = (uint8_t) pwm_a;
+    R_PWM_B = (uint8_t) pwm_b;
+    R_PWM_C = (uint8_t) pwm_c;
+  }
 }
 
 // Interrupt code should be as small as possible.
@@ -254,6 +286,7 @@ ISR(TIMER1_OVF_vect) {
   freq_counter++;
 
   if ((freq_counter & 0x01) == 0) {
-    motor_step += motor_speed;
+    motor_step[L] += motor_speed[L];
+    motor_step[R] += motor_speed[R];
   }
 }
