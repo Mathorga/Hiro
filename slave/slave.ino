@@ -27,6 +27,11 @@ enum Motor {
   R = 1
 };
 
+uint8_t motor_pwm_a[] = {L_PWM_A, R_PWM_A};
+uint8_t motor_pwm_b[] = {L_PWM_B, R_PWM_B};
+uint8_t motor_pwm_c[] = {L_PWM_C, R_PWM_C};
+uint8_t motor_enable[] = {L_ENABLE, R_ENABLE};
+
 uint16_t freq_counter = 0;
 uint16_t old_freq_counter = 0;
 
@@ -90,11 +95,6 @@ void setup() {
 
   Serial.begin(9600);
 
-  // Join i2c bus with address #4.
-  Wire.begin(4);
-  // Register for i2c requests.
-  Wire.onReceive(on_i2c_request);
-
   // Setup brushless motor Controller.
   init_motors();
 }
@@ -104,16 +104,48 @@ void read_serial() {
     // Read command.
     int32_t command = Serial.read();
 
-    // Read value.
-    int32_t value = Serial.read();
+    switch (command) {
+      case 'e': {
+          // Read value.
+          int32_t e_value = Serial.read();
 
-    switch(command) {
-      case 's':
-        enable_motors(value);
+          switch (e_value) {
+            case 'l':
+              enable_motor(L);
+              break;
+            case 'r':
+              enable_motor(R);
+              break;
+            case 'a':
+              enable_motors();
+          }
+        }
         break;
-      case 'r':
-        speed[L] = value;
-        speed[R] = value;
+      case 'd': {
+          // Read value.
+          int32_t d_value = Serial.read();
+
+          switch (d_value) {
+            case 'l':
+              disable_motor(L);
+              break;
+            case 'r':
+              disable_motor(R);
+              break;
+            case 'a':
+              disable_motors();
+          }
+        }
+        break;
+      case 'r': {
+          // Read motor.
+          int32_t motor = Serial.read();
+
+          // Read value.
+          int32_t r_value = Serial.read();
+
+          speed[motor] = r_value;
+        }
         break;
       default:
         break;
@@ -130,14 +162,6 @@ void loop() {
     // Record when loop starts.
     old_freq_counter = freq_counter;
 
-    // // Main logic: set speed between -100 and 100 in order to allow the motor to run
-    // if (speed >= max_speed) {
-    //   increment = -1;
-    // } else if (speed <= min_speed) {
-    //   increment = 1;
-    // }
-    // speed += increment;
-
     // Actually run the motor.
     run_motor(L);
     run_motor(R);
@@ -151,35 +175,22 @@ void loop() {
   }
 }
 
-void on_i2c_request(int length) {
-  // Safety check.  
-  if (length != 2) {
-    return;
-  }
-
-  // Read command.  
-  char command = Wire.read();
-
-  // Read value.
-  int8_t value = Wire.read();
-
-  switch(command) {
-    case 's':
-      enable_motors(value);
-      break;
-    case 'r':
-      speed[L] = value;
-      speed[R] = value;
-      break;
-    default:
-      break;
-  }
+void enable_motors() {
+  enable_motor(L);
+  enable_motor(R);
 }
 
-void enable_motors(int8_t value) {
-  int conv_val = value > 0x77 ? HIGH : LOW;
-  digitalWrite(L_ENABLE, conv_val);
-  digitalWrite(R_ENABLE, conv_val);
+void disable_motors() {
+  disable_motor(L);
+  disable_motor(R);
+}
+
+void enable_motor(uint8_t motor) {
+  digitalWrite(motor_enable[motor], HIGH);
+}
+
+void disable_motor(uint8_t motor) {
+  digitalWrite(motor_enable[motor], LOW);
 }
 
 void run_motor(uint8_t motor) {
@@ -225,13 +236,12 @@ void init_motors() {
   sei();
 
   // Turn off all PWM signals.
-  L_PWM_A = 0;
-  L_PWM_B = 0;
-  L_PWM_C = 0;
-
-  R_PWM_A = 0;
-  R_PWM_B = 0;
-  R_PWM_C = 0;
+  motor_pwm_a[L] = 0;
+  motor_pwm_b[L] = 0;
+  motor_pwm_c[L] = 0;
+  motor_pwm_a[R] = 0;
+  motor_pwm_b[R] = 0;
+  motor_pwm_c[R] = 0;
 
   // Switch off PWM Power.
   stop_motor();
@@ -268,15 +278,9 @@ void move_motor(uint8_t motor, uint8_t pos_step, uint16_t power) {
   pwm_c += 128;
 
   // Set motor pwm variables.
-  if (motor <= L) {
-    L_PWM_A = (uint8_t) pwm_a;
-    L_PWM_B = (uint8_t) pwm_b;
-    L_PWM_C = (uint8_t) pwm_c;
-  } else {
-    R_PWM_A = (uint8_t) pwm_a;
-    R_PWM_B = (uint8_t) pwm_b;
-    R_PWM_C = (uint8_t) pwm_c;
-  }
+  motor_pwm_a[motor] = (uint8_t) pwm_a;
+  motor_pwm_b[motor] = (uint8_t) pwm_b;
+  motor_pwm_c[motor] = (uint8_t) pwm_c;
 }
 
 // Interrupt code should be as small as possible.
