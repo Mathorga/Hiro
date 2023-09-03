@@ -106,10 +106,10 @@ void read_serial() {
 
     switch (command) {
       case 'e': {
-          // Read value.
-          int32_t e_value = Serial.read();
+          // Read motor value.
+          int32_t motor = Serial.read();
 
-          switch (e_value) {
+          switch (motor) {
             case 'l':
               enable_motor(L);
               break;
@@ -122,10 +122,10 @@ void read_serial() {
         }
         break;
       case 'd': {
-          // Read value.
-          int32_t d_value = Serial.read();
+          // Read motor value.
+          int32_t motor = Serial.read();
 
-          switch (d_value) {
+          switch (motor) {
             case 'l':
               disable_motor(L);
               break;
@@ -138,13 +138,19 @@ void read_serial() {
         }
         break;
       case 'r': {
-          // Read motor.
+          // Read motor value.
           int32_t motor = Serial.read();
 
-          // Read value.
-          int32_t r_value = Serial.read();
+          // Read speed value.
+          int32_t value = Serial.read();
 
-          speed[motor] = r_value;
+          if (motor == 'r' || motor == 'a') {
+            speed[R] = value;
+          }
+
+          if (motor == 'l' || motor == 'a') {
+            speed[L] = value;
+          }
         }
         break;
       default:
