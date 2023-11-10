@@ -22,21 +22,27 @@
 #define R_PWM_B OCR2A
 #define R_PWM_C OCR2B
 
-enum Motor {
-  L = 0,
-  R = 1
-};
+// Max command length.
+#define COMMAND_SIZE 4
 
-uint8_t motor_pwm_a[] = {L_PWM_A, R_PWM_A};
-uint8_t motor_pwm_b[] = {L_PWM_B, R_PWM_B};
-uint8_t motor_pwm_c[] = {L_PWM_C, R_PWM_C};
-uint8_t motor_enable[] = {L_ENABLE, R_ENABLE};
 
+// --------------------------- SCHEDULING ---------------------------
 uint16_t freq_counter = 0;
 uint16_t old_freq_counter = 0;
 
 // How fast is the main loop running.
 uint16_t loop_time = 0;
+
+
+// --------------------------- MOTORS ---------------------------
+enum Motor {
+  L = 0,
+  R = 1
+};
+uint8_t motor_pwm_a[] = {L_PWM_A, R_PWM_A};
+uint8_t motor_pwm_b[] = {L_PWM_B, R_PWM_B};
+uint8_t motor_pwm_c[] = {L_PWM_C, R_PWM_C};
+uint8_t motor_enable[] = {L_ENABLE, R_ENABLE};
 
 // Space Vector PWM lookup table
 // using uint8_t overflow for stepping
@@ -80,7 +86,19 @@ uint8_t max_power = 240;
 // In order to avoid useless computation, the power interpolation factor "((max_power - min_power) / (max_speed - min_speed))" is precomputed:
 float power_interpol_factor = ((((float) max_power) - ((float) min_power)) / (((float) max_speed) - ((float) min_speed)));
 
-int increment = 1;
+
+// --------------------------- SERIAL ---------------------------
+// Current command.
+char command[COMMAND_SIZE];
+
+// New command data flag, used to know whether there's new serial data to read or not.
+boolean new_data = false;
+
+// Command starting character.
+char command_starter = '{';
+
+// Command ending character.
+char command_ender = '}';
 
 void setup() {
   // Enable outputs.
@@ -100,16 +118,60 @@ void setup() {
 }
 
 void read_serial() {
-  if (Serial.available() > 1) {
-    // Read command.
-    int32_t command = Serial.read();
+    // Tells whether the character receiving is ongoing or not.
+    static boolean receiving = false;
 
-    switch (command) {
+    // Current char index.
+    static byte char_index = 0;
+
+    // Received character.
+    char read_char;
+
+    // Only look for new data when available.
+    while (Serial.available() > 0 && new_data == false) {
+        read_char = Serial.read();
+
+        if (receiving == true) {
+            if (read_char != command_ender) {
+                command[char_index] = read_char;
+                char_index++;
+                if (char_index >= COMMAND_SIZE) {
+                    char_index = COMMAND_SIZE - 1;
+                }
+            }
+            else {
+                command[char_index] = '\0'; // terminate the string
+                receiving = false;
+                char_index = 0;
+                new_data = true;
+            }
+        } else if (read_char == command_starter) {
+            receiving = true;
+        }
+    }
+}
+
+void show_command() {
+    if (new_data == true) {
+        Serial.print("This just in ... ");
+        Serial.println(command);
+        new_data = false;
+    }
+}
+
+void read_command() {
+    // Reads any new command.
+    read_serial();
+
+    new_data = false;
+
+    char command_key = command[0];
+    char* command_values = command + 1;
+
+    switch (command_key) {
+      // Enable motors.
       case 'e': {
-          // Read value.
-          int32_t e_value = Serial.read();
-
-          switch (e_value) {
+          switch (command_values[0]) {
             case 'l':
               enable_motor(L);
               break;
@@ -121,11 +183,10 @@ void read_serial() {
           }
         }
         break;
-      case 'd': {
-          // Read value.
-          int32_t d_value = Serial.read();
 
-          switch (d_value) {
+      // Disable motors.
+      case 'd': {
+          switch (command_values[0]) {
             case 'l':
               disable_motor(L);
               break;
@@ -137,25 +198,25 @@ void read_serial() {
           }
         }
         break;
+
+      // Run left motor.
+      case 'l': {
+          speed[L] = command_values[0];
+        }
+        break;
+      // Run right motor.
       case 'r': {
-          // Read motor.
-          int32_t motor = Serial.read();
-
-          // Read value.
-          int32_t r_value = Serial.read();
-
-          speed[motor] = r_value;
+          speed[R] = command_values[0];
         }
         break;
       default:
         break;
     }
-  }
 }
 
 void loop() {
   // Fetch any serial command.
-  read_serial();
+  read_command();
 
   // Run main loop every ~4ms.
   if ((freq_counter & 0x07f) == 0) {

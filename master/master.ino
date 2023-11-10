@@ -1,5 +1,3 @@
-#include <Wire.h>
-
 #define LEDPIN 13
 
 #define I2C 0
@@ -16,9 +14,6 @@ void setup() {
   pinMode (LEDPIN, OUTPUT);
 
   Serial.begin(9600);
-
-  Wire.begin(); // join i2c bus (address optional for master)
-  start_motor();
 }
 
 void loop() {
@@ -45,55 +40,31 @@ void loop() {
   delay(10);
 }
 
-void send_command(uint8_t address, char command, int8_t value) {
-  // Start transmitting to device #<address>.
-  Wire.beginTransmission(address);
-  // Send command.
-  Wire.write(command);
-  // Send value.
-  Wire.write(value);
-  // End transmission.
-  Wire.endTransmission();  
-}
-
 void start_motor() {
-  switch (protocol) {
-    case I2C:
-      send_command(4, 's', 0x7F);
-      break;
-    case SERIAL:
-      Serial.write('s');
-      Serial.write(0x7F);
-      break;
-    default:
-      break;
-  }
+  // Enable left motor.
+  Serial.write("{el}");
+
+  // Enable right motor.
+  Serial.write("{er}");
 }
 
 void stop_motor() {
-  switch (protocol) {
-    case I2C:
-      send_command(4, 's', 0x00);
-      break;
-    case SERIAL:
-      Serial.write('s');
-      Serial.write(0x00);
-      break;
-    default:
-      break;
-  }
+  // Disable left motor.
+  Serial.write("{dl}");
+
+  // Disable right motor.
+  Serial.write("{dr}");
 }
 
 void set_speed(int8_t value) {
-  switch (protocol) {
-    case I2C:
-      send_command(4, 'r', value);
-      break;
-    case SERIAL:
-      Serial.write('r');
-      Serial.write(value);
-      break;
-    default:
-      break;
+  if (value != 0) {
+    // Left motor command.
+    char l_command[] = {'{', 'l', value, '}'};
+  
+    // Right motor command.
+    char r_command[] = {'{', 'r', value, '}'};
+  
+    Serial.write(l_command);
+    Serial.write(r_command);
   }
 }
