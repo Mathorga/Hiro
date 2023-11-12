@@ -42,10 +42,10 @@ void loop() {
 
 void start_motor() {
   // Enable left motor.
-  Serial.write("{el}");
+  Serial.write("{el}", 4);
 
   // Enable right motor.
-  Serial.write("{er}");
+  Serial.write("{er}", 4);
 }
 
 void stop_motor() {
@@ -64,7 +64,7 @@ void set_speed(int8_t value) {
     // Right motor command.
     char r_command[] = {'{', 'r', value, '}'};
   
-    Serial.write(l_command);
-    Serial.write(r_command);
+    Serial.write(l_command, 4);
+    Serial.write(r_command, 4);
   }
 }
